@@ -1,0 +1,4 @@
+# Generated from /Users/zach/workspace/opentelemetry-ruby-contrib/instrumentation/system-metrics/opentelemetry-instrumentation-system-metrics.gemspec
+source 'https://rubygems.org'
+
+gemspec
