@@ -4,6 +4,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+begin
+  require 'opentelemetry-metrics-api'
+rescue LoadError
+end
+
 module OpenTelemetry
   module Instrumentation
     # The Base class holds all metadata and configuration for an
@@ -172,11 +177,16 @@ module OpenTelemetry
 
         if defined?(OpenTelemetry::Metrics)
           %i[
-            counter asynchronous_counter
-            histogram gauge asynchronous_gauge
-            updown_counter asynchronous_updown_counter
+            counter
+            observable_counter
+            histogram
+            gauge
+            observable_gauge
+            up_down_counter
+            observable_up_down_counter
           ].each do |instrument_kind|
-            define_method(instrument_kind) do |name, **opts|
+            define_method(instrument_kind) do |name, **opts, &block|
+              opts[:callback] ||= block
               register_instrument(instrument_kind, name, **opts)
             end
           end
@@ -193,12 +203,12 @@ module OpenTelemetry
           end
         else
           def counter(*, **); end
-          def asynchronous_counter(*, **); end
+          def observable_counter(*, **); end
           def histogram(*, **); end
           def gauge(*, **); end
-          def asynchronous_gauge(*, **); end
-          def updown_counter(*, **); end
-          def asynchronous_updown_counter(*, **); end
+          def observable_gauge(*, **); end
+          def up_down_counter(*, **); end
+          def observable_up_down_counter(*, **); end
         end
 
         private
@@ -325,12 +335,12 @@ module OpenTelemetry
       if defined?(OpenTelemetry::Metrics)
         %i[
           counter
-          asynchronous_counter
+          observable_counter
           histogram
           gauge
-          asynchronous_gauge
-          updown_counter
-          asynchronous_updown_counter
+          observable_gauge
+          up_down_counter
+          observable_up_down_counter
         ].each do |kind|
           define_method(kind) do |name|
             get_metrics_instrument(kind, name)
