@@ -277,9 +277,10 @@ module OpenTelemetry
 
         return false unless installable?(config)
 
-        instance_exec(@config, &@install_blk)
         @tracer = OpenTelemetry.tracer_provider.tracer(name, version)
         @meter = OpenTelemetry.meter_provider.meter(name, version: version) if metrics_enabled?
+
+        instance_exec(@config, &@install_blk)
         @installed = true
       end
 

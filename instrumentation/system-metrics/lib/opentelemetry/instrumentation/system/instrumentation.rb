@@ -8,17 +8,6 @@ module OpenTelemetry
   module Instrumentation
     module System
       class Instrumentation < Base
-        CPU_MODE = %i[
-          idle
-          interrupt
-          iowait
-          kernel
-          nice
-          steal
-          system
-          user
-        ]
-
         option :process_metrics, default: true, validate: :boolean
         option :system_metrics, default: false, validate: :boolean
         # an option called `metrics` must be set in order to use the SDK meter
@@ -32,82 +21,66 @@ module OpenTelemetry
         if defined?(OpenTelemetry::Metrics)
           # https://opentelemetry.io/docs/specs/semconv/system/process-metrics/#metric-processcputime
           observable_counter('process.cpu.time', unit: 's') do |obs|
-            instance.data_source.fetch_current.cpu_time_user
-            instance.data_source.fetch_current.cpu_time_system
-            # FIXME: attr { "cpu.mode": ['user', 'system', ...] }
-            # FIXME: impl
-            # ps: utime (user)
-            # ps: time (user + system)
-            # FIXME: need to emit multiple values here, and set attributes on them.
-            0
-            obs.observe(
-              instance.data_source.fetch_current.cpu_time_user,
-              'cpu.mode' => 'user'
-            )
-            obs.observe(
-              instance.data_source.fetch_current.cpu_time_system,
-              'cpu.mode' => 'system'
-            )
+            instance.maybe_observe(obs, 'cpu.mode' => 'user', &:cpu_time_user)
+            instance.maybe_observe(obs, 'cpu.mode' => 'system', &:cpu_time_system)
           end
 
           # https://opentelemetry.io/docs/specs/semconv/system/process-metrics/#metric-processcpuutilization
           # FIXME: what's up with this unit
-          observable_gauge('process.cpu.utilization', unit: '1') do
+          observable_gauge('process.cpu.utilization', unit: '1', disabled: true) do
             # FIXME: attr { "cpu.mode": ['user', 'system', ...] }
             # FIXME: impl
-            0
           end
 
           # https://opentelemetry.io/docs/specs/semconv/system/process-metrics/#metric-processmemoryusage
-          observable_up_down_counter('process.memory.usage', unit: 'By') do
-            # FIXME: impl
-            0
+          observable_up_down_counter('process.memory.usage', unit: 'By') do |obs|
+            instance.maybe_observe(obs, &:process_memory_usage)
           end
 
           # https://opentelemetry.io/docs/specs/semconv/system/process-metrics/#metric-processmemoryvirtual
-          observable_up_down_counter('process.memory.virtual', unit: 'By') do
-            # FIXME: implement me
-            0
+          observable_up_down_counter('process.memory.virtual', unit: 'By') do |obs|
+            instance.maybe_observe(obs, &:process_memory_virtual)
           end
 
           # https://opentelemetry.io/docs/specs/semconv/system/process-metrics/#metric-processdiskio
-          observable_counter('process.disk.io', unit: 'By') do
-            # FIXME: implement me
-            0
+          observable_counter('process.disk.io', unit: 'By', disabled: true) do
+            # FIXME: implement me - unclear how to proceed on this one.
+            # System-level metric would make more sense
           end
 
           # https://opentelemetry.io/docs/specs/semconv/system/process-metrics/#metric-processnetworkio
-          observable_counter('process.network.io', unit: 'By') do
-            # FIXME: implement me
-            0
+          observable_counter('process.network.io', unit: 'By', disabled: true) do
+            # FIXME: implement me - unclear how to proceed on this one.
+            # System-level metric would make more sense
           end
 
           # https://opentelemetry.io/docs/specs/semconv/system/process-metrics/#metric-processthreadcount
-          observable_up_down_counter('process.thread.count') { |obs| obs.observe(Thread.list.size) }
+          observable_up_down_counter('process.thread.count') do |obs|
+            # FIXME: should these be green threads or OS threads?
+            obs.observe(Thread.list.size)
+          end
 
           # https://opentelemetry.io/docs/specs/semconv/system/process-metrics/#metric-processcontext_switches
-          observable_counter('process.context_switches') do
-            # FIXME: attribute process.context_switch_type
-            0 # FIXME: implement me
+          observable_counter('process.context_switches') do |obs|
+            instance.maybe_observe(obs, 'process.context_switch_type' => 'voluntary', &:voluntary_context_switches)
+            instance.maybe_observe(obs, 'process.context_switch_type' => 'involuntary', &:involuntary_context_switches)
           end
 
           # https://opentelemetry.io/docs/specs/semconv/system/process-metrics/#metric-processopen_file_descriptorcount
           observable_up_down_counter('process.open_file_descriptor.count') do |obs|
-            # FIXME: this probably isn't the most efficient way, but it should be correct
+            # TODO: may not be the most efficient way, but it should be correct
             obs.observe(ObjectSpace.each_object(IO).count { |x| !x.closed? })
           end
 
           # https://opentelemetry.io/docs/specs/semconv/system/process-metrics/#metric-processpagingfaults
-          observable_counter('process.paging.faults') do
-            # FIXME: attribute process.paging.fault_type
-            # FIXME: implement me
-            0
+          observable_counter('process.paging.faults') do |obs|
+            instance.maybe_observe(obs, 'process.paging.fault_type' => 'major', &:page_faults_major)
+            instance.maybe_observe(obs, 'process.paging.fault_type' => 'minor', &:page_faults_minor)
           end
 
           # https://opentelemetry.io/docs/specs/semconv/system/process-metrics/#metric-processuptime
-          observable_gauge('process.uptime', unit: 's') do
-            # FIXME: implement
-            0
+          observable_gauge('process.uptime', unit: 's') do |obs|
+            instance.maybe_observe(obs, &:process_uptime)
           end
 
           # FIXME: upstream to semconv
@@ -115,7 +88,7 @@ module OpenTelemetry
         end
 
         install do |config|
-          load_platform_data_source
+          load_platform
           start_asynchronous_instruments(config)
         end
 
@@ -123,155 +96,87 @@ module OpenTelemetry
           defined?(OpenTelemetry::Metrics) && platform_supported?
         end
 
-        attr_reader :data_source
+        attr_reader :platform
+
+        def maybe_observe(observations, attributes = {})
+          if (value = yield(self))
+            observations.observe(value, attributes)
+          end
+        end
+
+        def cpu_time_system
+          current_data.cpu_time_system
+        end
+
+        def cpu_time_user
+          current_data.cpu_time_user
+        end
+
+        def process_memory_usage
+          current_data.process_memory_usage
+        end
+
+        def process_memory_virtual
+          current_data.process_memory_virtual
+        end
+
+        def voluntary_context_switches
+          current_data.voluntary_context_switches
+        end
+
+        def involuntary_context_switches
+          current_data.involuntary_context_switches
+        end
+
+        def page_faults_minor
+          current_data.page_faults_minor
+        end
+
+        def page_faults_major
+          current_data.page_faults_major
+        end
+
+        def process_uptime
+          current_data.process_uptime
+        end
 
         private
 
-        # FIXME: it would be _nice_ to create an instrument group that pings `ps` or something once
-        # and then reports collects all of the data from one output.
-        # - can cache the output on the instance here with a TTL?
+        def current_data
+          platform.fetch_current
+        end
 
         def start_asynchronous_instruments(config)
           return unless config[:metrics]
 
-          start_process_metrics_instruments if config[:process_metrics]
-          start_system_metrics_instruments if config[:system_metrics]
+          start_namespaced_instruments('process.') if config[:process_metrics]
+          start_namespaced_instruments('system.') if config[:system_metrics]
         end
 
-        def start_process_metrics_instruments
-          # FIXME: allow configuration
-          @instrument_configs.each_key do |type, name|
+        def start_namespaced_instruments(namespace)
+          @instrument_configs.each do |(type, name), instrument_config|
+            next unless name.start_with?(namespace)
+
+            # NOTE: this key exists on the config to allow for semconv-defined
+            # instruments that are unimplemented here.
+            next if instrument_config[:disabled]
             next unless configured?(name)
 
-            public_send(type, name) if name.start_with?('process.')
+            # instantiate the async instrument
+            public_send(type, name)
           end
-        end
-
-        def start_system_metrics_instruments
         end
 
         def configured?(metric_name)
-          # FIXME: implement config-based switches for these
           true
         end
 
-        def load_platform_data_source
-          @data_source = platform_data_source_impl&.new
+        def load_platform
+          @platform = Platform.impl&.new
         end
 
         def platform_supported?
-          !platform_data_source_impl.nil?
-        end
-
-        def platform_data_source_impl
-          case RbConfig::CONFIG['host_os']
-          when /darwin/
-            DarwinPS
-          when /linux/
-            LinuxPS
-          end
-        end
-
-        class PSData
-          def self.parse(raw)
-            output = raw.lines
-            header = output.shift.strip.split(/\s+/)
-            new(header.zip(output.first.strip.split(/\s+/)).to_h)
-          end
-
-          def initialize(parsed)
-            @parsed = parsed
-          end
-        end
-
-        class GenericPS
-          TTL = 15 # FIXME: sensible default?
-
-          attr_reader :cache
-
-          def initialize(ttl: TTL)
-            @ttl = ttl
-            @cache = {}
-            @mutex = Mutex.new
-          end
-
-          def fetch(pid)
-            @mutex.synchronize do
-              last_fetched_at, data = cache.fetch(pid) do
-                return refresh(pid)
-              end
-
-              return data if last_fetched_at + @ttl > Time.now.to_i
-
-              refresh(pid)
-            end
-          end
-
-          def fetch_current
-            fetch(Process.pid)
-          end
-
-          private
-
-          def refresh(pid)
-            data = parse_ps(pid)
-            cache[pid] = [Time.now.to_i, data]
-            data
-          end
-
-          def parse_ps(pid)
-            data_class.parse(exec_shell_ps(pid))
-          end
-
-          def data_class
-            PSData
-          end
-
-          def exec_shell_ps(_pid)
-            raise 'not implemented'
-          end
-        end
-
-        class DarwinPS < GenericPS
-          private
-
-          class Data < PSData
-            def cpu_time_user
-              parse_cpu_time(@parsed['UTIME'])
-            end
-
-            def cpu_time_system
-              parse_cpu_time(@parsed['TIME']) - cpu_time_user
-            end
-
-            private
-
-            def parse_cpu_time(str)
-              components = str.split(':', 3)
-
-              # FIXME: make this better
-              if components.length == 2
-                hours = 0
-                minutes, seconds = components
-              elsif components.length == 3
-                hours, minutes, seconds = components
-              end
-
-              ((Integer(hours) * 60 * 60) + (Integer(minutes) * 60) + Float(seconds)).to_i
-            end
-          end
-
-          def data_class
-            Data
-          end
-
-          def exec_shell_ps(pid)
-            `ps -p #{pid} -O utime,time`
-          end
-        end
-
-        class LinuxPS < GenericPS
-          # FIXME: impl
+          !Platform.impl.nil?
         end
       end
     end
