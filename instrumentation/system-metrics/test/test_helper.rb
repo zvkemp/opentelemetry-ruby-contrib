@@ -40,6 +40,7 @@ end
 def reset_meter_provider
   return unless LoadedMetricsFeatures.sdk_loaded?
 
+  reset_metrics_exporter
   resource = OpenTelemetry.meter_provider.resource
   OpenTelemetry.meter_provider = OpenTelemetry::SDK::Metrics::MeterProvider.new(resource: resource)
   OpenTelemetry.meter_provider.add_metric_reader(METRICS_EXPORTER)
@@ -48,8 +49,10 @@ end
 def reset_metrics_exporter
   return unless LoadedMetricsFeatures.sdk_loaded?
 
-  METRICS_EXPORTER.pull
-  METRICS_EXPORTER.reset
+  METRICS_EXPORTER.instance_exec do
+    @metric_snapshots.clear
+    @metric_store.instance_exec { @metric_streams.clear }
+  end
 end
 
 if LoadedMetricsFeatures.sdk_loaded?
@@ -88,6 +91,10 @@ module ConditionalEvaluation
 
     super(desc, &block)
   end
+end
+
+def linux?
+  RbConfig::CONFIG['host_os'].include?('linux')
 end
 
 Minitest::Spec.prepend(ConditionalEvaluation)

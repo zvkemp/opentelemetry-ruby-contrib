@@ -15,6 +15,7 @@ module OpenTelemetry
   end
 end
 
-require_relative 'system/instrumentation'
 require_relative 'system/version'
+require_relative 'system/platform'
+require_relative 'system/instrumentation'
 require 'opentelemetry/common'
