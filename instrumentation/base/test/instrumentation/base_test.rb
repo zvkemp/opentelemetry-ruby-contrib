@@ -62,20 +62,20 @@ describe OpenTelemetry::Instrumentation::Base do
 
       if defined?(OpenTelemetry::Metrics)
         counter 'example.counter'
-        asynchronous_counter 'example.asynchronous_counter'
+        observable_counter 'example.observable_counter'
         histogram 'example.histogram'
         gauge 'example.gauge'
-        asynchronous_gauge 'example.asynchronous_gauge'
-        updown_counter 'example.updown_counter'
-        asynchronous_updown_counter 'example.asynchronous_updown_counter'
+        observable_gauge 'example.observable_gauge'
+        up_down_counter 'example.up_down_counter'
+        observable_up_down_counter 'example.observable_up_down_counter'
       end
 
       def example_counter
         counter 'example.counter'
       end
 
-      def example_asynchronous_counter
-        asynchronous_counter 'example.asynchronous_counter'
+      def example_observable_counter
+        observable_counter 'example.observable_counter'
       end
 
       def example_histogram
@@ -86,16 +86,16 @@ describe OpenTelemetry::Instrumentation::Base do
         gauge 'example.gauge'
       end
 
-      def example_asynchronous_gauge
-        asynchronous_gauge 'example.asynchronous_gauge'
+      def example_observable_gauge
+        observable_gauge 'example.observable_gauge'
       end
 
-      def example_updown_counter
-        updown_counter 'example.updown_counter'
+      def example_up_down_counter
+        up_down_counter 'example.up_down_counter'
       end
 
-      def example_asynchronous_updown_counter
-        asynchronous_updown_counter 'example.asynchronous_updown_counter'
+      def example_observable_up_down_counter
+        observable_up_down_counter 'example.observable_up_down_counter'
       end
     end
   end
