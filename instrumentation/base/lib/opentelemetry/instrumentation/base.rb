@@ -4,6 +4,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+begin
+  require 'opentelemetry-metrics-api'
+rescue LoadError
+end
+
 module OpenTelemetry
   module Instrumentation
     # The Base class holds all metadata and configuration for an

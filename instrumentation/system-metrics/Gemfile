@@ -1,0 +1,25 @@
+# Generated from /Users/zach/workspace/opentelemetry-ruby-contrib/instrumentation/system-metrics/opentelemetry-instrumentation-system-metrics.gemspec
+source 'https://rubygems.org'
+
+gem 'opentelemetry-instrumentation-base', path: '../base'
+
+# FIXME: the metrics-api is behind the metrics-sdk gem for some reason; bundle from git for now
+OTEL_RUBY_GEM = lambda do |short_name|
+  short_name = short_name.split(/-|_/)
+  long_name = ['opentelemetry', *short_name].join('-')
+
+  gem long_name,
+      git: 'https://www.github.com/zvkemp/opentelemetry-ruby',
+      glob: "#{short_name.join('_')}/*.gemspec",
+      ref: '9b46ceb3'
+end
+
+OTEL_RUBY_GEM['metrics-api']
+OTEL_RUBY_GEM['metrics-sdk']
+
+# gem 'opentelemetry-metrics-api', path: '/Users/zach/workspace/opentelemetry-ruby/metrics_api'
+# gem 'opentelemetry-metrics-sdk', path: '/Users/zach/workspace/opentelemetry-ruby/metrics_sdk'
+
+gem 'pry-byebug'
+
+gemspec
