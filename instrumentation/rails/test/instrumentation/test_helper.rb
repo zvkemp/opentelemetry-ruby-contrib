@@ -5,11 +5,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 require 'logger'
-
 require 'simplecov'
-SimpleCov.command_name(:instrumentation_tests) # custom name required to merge with the 'railtie' tests
-SimpleCov.start
-
 require 'bundler/setup'
 Bundler.require(:default, :development, :test)
 
